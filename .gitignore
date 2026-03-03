@@ -1,0 +1,13 @@
+# dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# environment variables（実際の値はコミットしない）
+.env.local
+.env
+
+# Vercel
+.vercel
