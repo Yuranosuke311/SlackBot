@@ -4,7 +4,7 @@ import { slack, verifySlackSignature } from "@/lib/slack";
 import { saveReminder, getReminder, completeReminder } from "@/lib/reminders";
 import { getInternProfile, saveInternProfile } from "@/lib/intern-profiles";
 import { saveSubmission, getSubmission, markAsPaid } from "@/lib/intern-salaries";
-import { generateInvoicePdf, type InvoiceData } from "@/lib/invoice-pdf-renderer";
+import { generateInvoicePdf, type InvoiceData } from "@/lib/invoice-pdf";
 import { uploadToDrive } from "@/lib/google-drive";
 import type { Reminder } from "@/types/reminder";
 import type {
@@ -403,6 +403,7 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
   };
 
   await saveSubmission(submission);
+  console.log("[invoice] saveSubmission OK");
 
   const profile: InternProfile = {
     slack_user_id: userId,
@@ -415,9 +416,12 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     updated_at: submittedAt,
   };
   await saveInternProfile(profile);
+  console.log("[invoice] saveInternProfile OK");
 
   const invoiceData = buildInvoiceData(submission, draft.phone);
+  console.log("[invoice] buildInvoiceData OK");
   const pdfBuffer = await generateInvoicePdf(invoiceData);
+  console.log("[invoice] generateInvoicePdf OK, size:", pdfBuffer.length);
   const fileName = getInvoiceFileName(submission.month, submission.intern_name);
 
   const dmResult = await slack.conversations.open({ users: userId });
