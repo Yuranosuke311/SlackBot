@@ -463,7 +463,12 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     tasks.push(uploadToDrive(pdfBuffer, fileName, process.env.GOOGLE_DRIVE_FOLDER_ID));
   }
 
-  await Promise.allSettled(tasks);
+  const results = await Promise.allSettled(tasks);
+  results.forEach((result, i) => {
+    if (result.status === "rejected") {
+      console.error(`task[${i}] failed:`, result.reason);
+    }
+  });
 }
 
 export async function POST(request: NextRequest) {
