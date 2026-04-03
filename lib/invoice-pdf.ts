@@ -1,4 +1,5 @@
-﻿import React from "react";
+import { createElement, type ReactElement } from "react";
+import type { DocumentProps } from "@react-pdf/renderer";
 import {
   Document,
   Font,
@@ -49,97 +50,101 @@ function yen(amount: number): string {
   return `¥${amount.toLocaleString("ja-JP")}`;
 }
 
-function createText(value: string, style?: any) {
-  const props = style ? ({ style } as any) : null;
-  return React.createElement(Text as any, props, value);
-}
-
-function createRow(left: string, right: string, bold = false) {
-  return React.createElement(
+function makeRow(left: string, right: string) {
+  return createElement(
     View,
     { style: styles.row },
-    createText(left, bold ? styles.bold : undefined),
-    createText(right, bold ? styles.bold : undefined)
+    createElement(Text, null, left),
+    createElement(Text, null, right),
   );
 }
 
-function createInvoiceDocument(data: InvoiceData): React.ReactElement {
-  return React.createElement(
+function InvoiceDocument({ data }: { data: InvoiceData }) {
+  return createElement(
     Document,
     null,
-    React.createElement(
+    createElement(
       Page,
       { size: "A4", style: styles.page },
-      createText("請 求 書", styles.title),
+      createElement(Text, { style: styles.title }, "請 求 書"),
 
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createText(`発行日: ${data.issueDate}`),
-        createText(`請求書番号: ${data.invoiceNumber}`)
+        createElement(Text, null, `発行日: ${data.issueDate}`),
+        createElement(Text, null, `請求書番号: ${data.invoiceNumber}`),
       ),
 
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createText("請求先:"),
-        createText(`${data.companyName} 御中`)
+        createElement(Text, null, "請求先:"),
+        createElement(Text, null, `${data.companyName} 御中`),
       ),
 
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createText("請求者:"),
-        createText(data.internName),
-        createText(data.internAddress),
-        createText(data.internPhone)
+        createElement(Text, null, "請求者:"),
+        createElement(Text, null, String(data.internName)),
+        createElement(Text, null, String(data.internAddress)),
+        createElement(Text, null, String(data.internPhone)),
       ),
 
-      React.createElement(View, { style: styles.divider }),
+      createElement(View, { style: styles.divider }),
 
-      React.createElement(View, { style: styles.section }, createText(`件名: ${data.month}分 業務委託費`)),
-
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createRow("稼働時間", `${data.workingHours}時間`),
-        createRow("単価", `${yen(data.unitPrice)} / 時`),
-        createRow("給与小計", yen(data.totalSalary))
+        createElement(Text, null, `件名: ${data.month}分 業務委託費`),
       ),
 
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createText("経費内訳:"),
-        createRow("移動費", yen(data.expenseTransport)),
-        createRow("交通費", yen(data.expenseTravel)),
-        createRow("AI利用費", yen(data.expenseAi)),
-        createRow("経費合計", yen(data.totalExpense))
+        makeRow("稼働時間", `${data.workingHours}時間`),
+        makeRow("単価", `${yen(data.unitPrice)} / 時`),
+        makeRow("給与小計", yen(data.totalSalary)),
       ),
 
-      React.createElement(View, { style: styles.divider }),
-
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createRow("税抜合計", yen(data.subtotal)),
-        createRow("消費税（10%）", yen(data.taxAmount)),
-        createRow("税込請求合計", yen(data.totalAmount), true)
+        createElement(Text, null, "経費内訳:"),
+        makeRow("移動費", yen(data.expenseTransport)),
+        makeRow("交通費", yen(data.expenseTravel)),
+        makeRow("AI利用費", yen(data.expenseAi)),
+        makeRow("経費合計", yen(data.totalExpense)),
       ),
 
-      React.createElement(View, { style: styles.divider }),
+      createElement(View, { style: styles.divider }),
 
-      React.createElement(
+      createElement(
         View,
         { style: styles.section },
-        createText("お振込先:"),
-        createText(data.bankInfo),
-        createText(`振込期限: ${data.paymentDue}`)
-      )
-    )
+        makeRow("税抜合計", yen(data.subtotal)),
+        makeRow("消費税（10%）", yen(data.taxAmount)),
+        createElement(
+          View,
+          { style: styles.row },
+          createElement(Text, { style: styles.bold }, "税込請求合計"),
+          createElement(Text, { style: styles.bold }, yen(data.totalAmount)),
+        ),
+      ),
+
+      createElement(View, { style: styles.divider }),
+
+      createElement(
+        View,
+        { style: styles.section },
+        createElement(Text, null, "お振込先:"),
+        createElement(Text, null, String(data.bankInfo)),
+        createElement(Text, null, `振込期限: ${data.paymentDue}`),
+      ),
+    ),
   );
 }
 
 export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
-  return renderToBuffer(createInvoiceDocument(data));
+  return renderToBuffer(InvoiceDocument({ data }) as ReactElement<DocumentProps>);
 }
