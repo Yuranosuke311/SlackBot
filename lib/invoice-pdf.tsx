@@ -1,4 +1,5 @@
-﻿import {
+﻿import React from "react";
+import {
   Document,
   Font,
   Page,
@@ -7,14 +8,13 @@
   View,
   renderToBuffer,
 } from "@react-pdf/renderer";
-import React from "react";
 
 Font.register({
   family: "NotoSansJP",
   src: "https://fonts.gstatic.com/ea/notosansjapanese/v6/NotoSansJP-Regular.otf",
 });
 
-type InvoiceData = {
+export type InvoiceData = {
   invoiceNumber: string;
   issueDate: string;
   companyName: string;
@@ -37,32 +37,12 @@ type InvoiceData = {
 };
 
 const styles = StyleSheet.create({
-  page: {
-    fontFamily: "NotoSansJP",
-    fontSize: 10,
-    padding: 36,
-    lineHeight: 1.5,
-  },
-  title: {
-    fontSize: 20,
-    textAlign: "center",
-    marginBottom: 12,
-  },
-  section: {
-    marginBottom: 10,
-  },
-  divider: {
-    borderBottomWidth: 1,
-    borderBottomColor: "#222",
-    marginVertical: 8,
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  bold: {
-    fontWeight: 700,
-  },
+  page: { fontFamily: "NotoSansJP", fontSize: 10, padding: 36, lineHeight: 1.5 },
+  title: { fontSize: 20, textAlign: "center", marginBottom: 12 },
+  section: { marginBottom: 10 },
+  divider: { borderBottomWidth: 1, borderBottomColor: "#222", marginVertical: 8 },
+  row: { flexDirection: "row", justifyContent: "space-between" },
+  bold: { fontWeight: 700 },
 });
 
 function yen(amount: number): string {
@@ -76,13 +56,13 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
         <Text style={styles.title}>請 求 書</Text>
 
         <View style={styles.section}>
-          <Text>発行日: {data.issueDate}</Text>
-          <Text>請求書番号: {data.invoiceNumber}</Text>
+          <Text>{`発行日: ${data.issueDate}`}</Text>
+          <Text>{`請求書番号: ${data.invoiceNumber}`}</Text>
         </View>
 
         <View style={styles.section}>
           <Text>請求先:</Text>
-          <Text>{data.companyName} 御中</Text>
+          <Text>{`${data.companyName} 御中`}</Text>
         </View>
 
         <View style={styles.section}>
@@ -95,17 +75,17 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
         <View style={styles.divider} />
 
         <View style={styles.section}>
-          <Text>件名: {data.month}分 業務委託費</Text>
+          <Text>{`件名: ${data.month}分 業務委託費`}</Text>
         </View>
 
         <View style={styles.section}>
           <View style={styles.row}>
             <Text>稼働時間</Text>
-            <Text>{data.workingHours}時間</Text>
+            <Text>{`${data.workingHours}時間`}</Text>
           </View>
           <View style={styles.row}>
             <Text>単価</Text>
-            <Text>{yen(data.unitPrice)} / 時</Text>
+            <Text>{`${yen(data.unitPrice)} / 時`}</Text>
           </View>
           <View style={styles.row}>
             <Text>給与小計</Text>
@@ -155,14 +135,12 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
         <View style={styles.section}>
           <Text>お振込先:</Text>
           <Text>{data.bankInfo}</Text>
-          <Text>振込期限: {data.paymentDue}</Text>
+          <Text>{`振込期限: ${data.paymentDue}`}</Text>
         </View>
       </Page>
     </Document>
   );
 }
-
-export type { InvoiceData };
 
 export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
   return renderToBuffer(<InvoiceDocument data={data} />);
