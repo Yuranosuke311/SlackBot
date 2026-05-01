@@ -35,11 +35,10 @@ function getCurrentMonthJST(): string {
   return `${year}-${month}`;
 }
 
-function getLastDayOfNextMonth(): string {
-  const now = new Date();
-  const jst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Tokyo" }));
-  const lastDay = new Date(jst.getFullYear(), jst.getMonth() + 2, 0);
-
+function getLastDayOfMonthAfter(month: string): string {
+  const [yearStr, monthStr] = month.split("-");
+  // day 0 of month+2 = last day of month+1
+  const lastDay = new Date(Number(yearStr), Number(monthStr), 0);
   const y = lastDay.getFullYear();
   const m = String(lastDay.getMonth() + 1).padStart(2, "0");
   const d = String(lastDay.getDate()).padStart(2, "0");
@@ -927,7 +926,7 @@ export async function POST(request: NextRequest) {
       tax_amount: taxAmount,
       total_amount: totalAmount,
       bank_info: bankInfo,
-      payment_due: getLastDayOfNextMonth(),
+      payment_due: getLastDayOfMonthAfter(month),
       invoice_number: getInvoiceNumber(month, userId),
     };
 
