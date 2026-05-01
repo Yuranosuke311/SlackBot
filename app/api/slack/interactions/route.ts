@@ -123,6 +123,7 @@ function buildInternSalaryModal(
     name: string;
     address: string;
     phone: string;
+    salaryTaxType: "exclusive" | "inclusive";
     unitPrice: string;
     workingHours: string;
     fixedAmount: string;
@@ -222,6 +223,26 @@ function buildInternSalaryModal(
       },
       {
         type: "input" as const,
+        block_id: "salary_tax_type_block",
+        label: { type: "plain_text" as const, text: "報酬の税区分" },
+        element: {
+          type: "radio_buttons" as const,
+          action_id: "salary_tax_type_select",
+          initial_option: {
+            text: {
+              type: "plain_text" as const,
+              text: initialValues.salaryTaxType === "inclusive" ? "税込み" : "税抜き",
+            },
+            value: initialValues.salaryTaxType,
+          },
+          options: [
+            { text: { type: "plain_text" as const, text: "税抜き（消費税10%を別途加算）" }, value: "exclusive" },
+            { text: { type: "plain_text" as const, text: "税込み（消費税を含む金額）" }, value: "inclusive" },
+          ],
+        },
+      },
+      {
+        type: "input" as const,
         block_id: "name_block",
         label: { type: "plain_text" as const, text: "氏名" },
         element: {
@@ -259,7 +280,7 @@ function buildInternSalaryModal(
         type: "section" as const,
         text: {
           type: "mrkdwn" as const,
-          text: "*経費内訳*（該当するもののみ入力）",
+          text: "*経費内訳*（該当するもののみ入力・金額は税込みで記入）",
         },
       },
       {
@@ -377,21 +398,34 @@ function buildConfirmModal(draft: InternSalaryDraft) {
             `*電話番号*: ${draft.phone}`,
             `*対象月*: ${formatMonthJP(draft.month)}`,
             "",
-            ...(draft.salary_type === "fixed"
-              ? [`*月額固定報酬*: ${formatCurrency(draft.total_salary)}`]
-              : [
-                  `*単価*: ${formatCurrency(draft.unit_price)}/時`,
-                  `*稼働時間*: ${draft.working_hours}時間`,
-                  `*給与小計*: ${formatCurrency(draft.total_salary)}`,
-                ]),
+            ...(draft.salary_tax_type === "inclusive"
+              ? draft.salary_type === "fixed"
+                ? [`*月額固定報酬（税込）*: ${formatCurrency(draft.total_salary)}`]
+                : [
+                    `*単価（税込）*: ${formatCurrency(draft.unit_price)}/時`,
+                    `*稼働時間*: ${draft.working_hours}時間`,
+                    `*給与小計（税込）*: ${formatCurrency(draft.total_salary)}`,
+                  ]
+              : draft.salary_type === "fixed"
+                ? [`*月額固定報酬（税抜）*: ${formatCurrency(draft.total_salary)}`]
+                : [
+                    `*単価（税抜）*: ${formatCurrency(draft.unit_price)}/時`,
+                    `*稼働時間*: ${draft.working_hours}時間`,
+                    `*給与小計（税抜）*: ${formatCurrency(draft.total_salary)}`,
+                  ]
+            ),
             "",
             "*経費内訳*: ",
             expenseLines,
-            `*経費合計*: ${formatCurrency(draft.total_expense)}`,
+            `*経費合計（税込）*: ${formatCurrency(draft.total_expense)}`,
             "──────────────",
-            `*税抜合計*: ${formatCurrency(draft.subtotal)}`,
-            `*消費税（10%）*: ${formatCurrency(draft.tax_amount)}`,
-            `*税込請求合計*: ${formatCurrency(draft.total_amount)}`,
+            ...(draft.salary_tax_type === "exclusive"
+              ? [
+                  `*消費税（10%）*: ${formatCurrency(draft.tax_amount)}`,
+                  `*税込請求合計*: ${formatCurrency(draft.total_amount)}`,
+                ]
+              : [`*請求合計*: ${formatCurrency(draft.total_amount)}`]
+            ),
             "",
             `*振込口座*: ${draft.bank_info}`,
             `*振込期限*: ${formatDateJP(draft.payment_due)}`,
@@ -451,6 +485,7 @@ function buildInvoiceData(
     internPhone: phone,
     month: formatMonthJP(submission.month),
     salaryType: submission.salary_type ?? "hourly",
+    salaryTaxType: submission.salary_tax_type ?? "exclusive",
     workingHours: submission.working_hours,
     unitPrice: submission.unit_price,
     totalSalary: submission.total_salary,
@@ -485,6 +520,7 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
     phone: draft.phone,
     bank_info: draft.bank_info,
     salary_type: draft.salary_type,
+    salary_tax_type: draft.salary_tax_type,
     unit_price: draft.unit_price,
     fixed_amount: draft.salary_type === "fixed" ? draft.total_salary : undefined,
     expense_names: buildEmptyExpenseNames(draft.expenses),
@@ -499,48 +535,20 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
   console.log("[invoice] generateInvoicePdf OK, size:", pdfBuffer.length);
   const fileName = getInvoiceFileName(submission.month, submission.intern_name);
 
-  const managerIds = (process.env.MANAGER_SLACK_ID ?? "")
-    .split(",")
-    .map((id) => id.trim())
-    .filter(Boolean);
-
-  const [internDm, ...managerDms] = await Promise.all([
-    slack.conversations.open({ users: userId }),
-    ...managerIds.map((id) => slack.conversations.open({ users: id })),
-  ]);
-  const dmChannelId = internDm.channel?.id;
-  const managerChannelIds = managerDms
-    .map((dm) => dm.channel?.id)
-    .filter((id): id is string => Boolean(id));
-
+  const sharedChannelId = process.env.MANAGER_CHANNEL_ID;
   const tasks: Promise<unknown>[] = [];
 
-  if (dmChannelId) {
+  if (sharedChannelId) {
     tasks.push(
       slack.filesUploadV2({
-        channel_id: dmChannelId,
+        channel_id: sharedChannelId,
         filename: fileName,
         file: pdfBuffer,
         initial_comment: [
-          `✅ 給与情報を提出しました（${formatMonthJP(submission.month)}分）`,
+          `📩 ${submission.intern_name}さんが${formatMonthJP(submission.month)}分の給与情報を提出しました`,
           "",
           `提出日時: ${formatDateTimeJST(new Date())}`,
           `請求書番号: ${submission.invoice_number}`,
-        ].join("\n"),
-      })
-    );
-  }
-
-  for (const managerChannelId of managerChannelIds) {
-    tasks.push(
-      slack.filesUploadV2({
-        channel_id: managerChannelId,
-        filename: fileName,
-        file: pdfBuffer,
-        initial_comment: [
-          `📩 ${submission.intern_name}さんが給与情報を提出しました`,
-          "",
-          `対象月: ${formatMonthJP(submission.month)}`,
           `税込請求合計: ${formatCurrency(submission.total_amount)}`,
           `振込先: ${submission.bank_info}`,
           `振込期限: ${formatDateJP(submission.payment_due)}`,
@@ -662,10 +670,16 @@ export async function POST(request: NextRequest) {
         metadata.month ??
         getCurrentMonthJST();
 
+      const currentTaxType: "exclusive" | "inclusive" =
+        currentValues.salary_tax_type_block?.salary_tax_type_select?.selected_option?.value === "inclusive"
+          ? "inclusive"
+          : "exclusive";
+
       await slack.views.update({
         view_id: payload.view.id,
         hash: payload.view.hash,
         view: buildInternSalaryModal(month, newSalaryType, {
+          salaryTaxType: currentTaxType,
           name: currentValues.name_block?.name_input?.value ?? "",
           address: currentValues.address_block?.address_input?.value ?? "",
           phone: currentValues.phone_block?.phone_input?.value ?? "",
@@ -705,9 +719,11 @@ export async function POST(request: NextRequest) {
       const currentMonth = getCurrentMonthJST();
 
       const salaryType: "hourly" | "fixed" = profile?.salary_type ?? "hourly";
+      const salaryTaxType: "exclusive" | "inclusive" = profile?.salary_tax_type ?? "exclusive";
       await slack.views.open({
         trigger_id: payload.trigger_id,
         view: buildInternSalaryModal(currentMonth, salaryType, {
+          salaryTaxType,
           name: profile?.name ?? "",
           address: profile?.address ?? "",
           phone: profile?.phone ?? "",
@@ -882,10 +898,15 @@ export async function POST(request: NextRequest) {
       workingHours = Number(workingHoursRaw);
       totalSalary = Math.floor(unitPrice * workingHours);
     }
+    const salaryTaxType: "exclusive" | "inclusive" =
+      values.salary_tax_type_block?.salary_tax_type_select?.selected_option?.value === "inclusive"
+        ? "inclusive"
+        : "exclusive";
+
     const totalExpense = expenses.reduce((sum, e) => sum + e.amount, 0);
-    const subtotal = totalSalary + totalExpense;
-    const taxAmount = Math.round(subtotal * 0.1);
-    const totalAmount = subtotal + taxAmount;
+    const subtotal = totalSalary;
+    const taxAmount = salaryTaxType === "exclusive" ? Math.round(totalSalary * 0.1) : 0;
+    const totalAmount = totalSalary + taxAmount + totalExpense;
 
     const draft: InternSalaryDraft = {
       intern_id: userId,
@@ -894,6 +915,7 @@ export async function POST(request: NextRequest) {
       phone,
       month,
       salary_type: salaryType,
+      salary_tax_type: salaryTaxType,
       unit_price: unitPrice,
       working_hours: workingHours,
       expenses,

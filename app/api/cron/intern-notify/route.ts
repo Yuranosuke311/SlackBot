@@ -157,10 +157,7 @@ export async function POST(request: NextRequest) {
     const submittedIds = await getSubmittedUserIds(currentMonth);
     const unsubmittedIds = knownIds.filter((id) => !submittedIds.includes(id));
 
-    const managerDm = await slack.conversations.open({
-      users: process.env.MANAGER_SLACK_ID!,
-    });
-    const managerChannelId = managerDm.channel?.id;
+    const managerChannelId = process.env.MANAGER_CHANNEL_ID;
 
     if (managerChannelId) {
       const blocks: KnownBlock[] = [

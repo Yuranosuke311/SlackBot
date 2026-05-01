@@ -11,6 +11,7 @@ export type InvoiceData = {
   internPhone: string;
   month: string;
   salaryType: "hourly" | "fixed";
+  salaryTaxType: "exclusive" | "inclusive";
   workingHours: number;
   unitPrice: number;
   totalSalary: number;
@@ -102,17 +103,29 @@ export async function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
         doc.moveDown(0.3);
       }
     }
-    row("経費合計", yen(data.totalExpense));
+    row("経費合計（税込）", yen(data.totalExpense));
 
     divider();
 
-    row("税抜合計", yen(data.subtotal));
-    doc.moveDown(0.3);
-    row("消費税（10%）", yen(data.taxAmount));
-    doc.moveDown(0.3);
-    doc.fontSize(11);
-    row("税込請求合計", yen(data.totalAmount));
-    doc.fontSize(10);
+    if (data.salaryTaxType === "exclusive") {
+      row("給与（税抜）", yen(data.subtotal));
+      doc.moveDown(0.3);
+      row("消費税（10%）", yen(data.taxAmount));
+      doc.moveDown(0.3);
+      row("経費合計（税込）", yen(data.totalExpense));
+      doc.moveDown(0.3);
+      doc.fontSize(11);
+      row("税込請求合計", yen(data.totalAmount));
+      doc.fontSize(10);
+    } else {
+      row("給与（税込）", yen(data.subtotal));
+      doc.moveDown(0.3);
+      row("経費合計（税込）", yen(data.totalExpense));
+      doc.moveDown(0.3);
+      doc.fontSize(11);
+      row("請求合計", yen(data.totalAmount));
+      doc.fontSize(10);
+    }
 
     divider();
 

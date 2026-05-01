@@ -5,6 +5,7 @@ export type InternProfile = {
   phone: string;
   bank_info: string;
   salary_type: "hourly" | "fixed";
+  salary_tax_type: "exclusive" | "inclusive";
   unit_price: number;
   fixed_amount?: number;
   expense_names: string[];
@@ -23,6 +24,7 @@ export type InternSalarySubmission = {
   intern_address: string;
   month: string;
   salary_type: "hourly" | "fixed";
+  salary_tax_type: "exclusive" | "inclusive";
   unit_price: number;
   working_hours: number;
   expenses: ExpenseItem[];
