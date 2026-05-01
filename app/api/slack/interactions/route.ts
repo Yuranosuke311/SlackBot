@@ -38,7 +38,7 @@ function getCurrentMonthJST(): string {
 function getLastDayOfMonthAfter(month: string): string {
   const [yearStr, monthStr] = month.split("-");
   // day 0 of month+2 = last day of month+1
-  const lastDay = new Date(Number(yearStr), Number(monthStr), 0);
+  const lastDay = new Date(Number(yearStr), Number(monthStr) + 1, 0);
   const y = lastDay.getFullYear();
   const m = String(lastDay.getMonth() + 1).padStart(2, "0");
   const d = String(lastDay.getDate()).padStart(2, "0");
