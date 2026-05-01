@@ -31,16 +31,6 @@ function getLastDayOfMonth(year: number, month: number): string {
   return `${y}-${m}-${d}`;
 }
 
-function getLastDayOfNextMonth(): string {
-  const parts = new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "numeric",
-  }).formatToParts(new Date());
-  const year = Number(parts.find((part) => part.type === "year")?.value);
-  const month = Number(parts.find((part) => part.type === "month")?.value);
-  return getLastDayOfMonth(year, month + 1);
-}
 
 function getDaysUntil(targetDate: string, today: string): number {
   const target = new Date(targetDate).getTime();
@@ -76,9 +66,7 @@ export async function POST(request: NextRequest) {
   const currentYear = Number(currentYearStr);
   const currentMonthNumber = Number(currentMonthStr);
   const lastDayOfMonth = getLastDayOfMonth(currentYear, currentMonthNumber);
-  const lastDayOfNextMonth = getLastDayOfNextMonth();
   const daysUntilSubmission = getDaysUntil(lastDayOfMonth, today);
-  const daysUntilPayment = getDaysUntil(lastDayOfNextMonth, today);
 
   // ケース A: 毎月1日に月次案内をチャンネル投稿
   if (today.endsWith("-01")) {
@@ -150,11 +138,14 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ケース C: 来月末3日前〜来月末日に管理者へ振込サマリー
-  if (daysUntilPayment >= 0 && daysUntilPayment <= 3) {
-    const submissions = await getSubmissionsForMonth(currentMonth);
+  // ケース C: 今月末3日前〜今月末日に先月分の振込サマリーを通知
+  // （先月提出 → 今月末振込のサイクルに合わせる）
+  if (daysUntilSubmission >= 0 && daysUntilSubmission <= 3) {
+    const prevMonthDate = new Date(currentYear, currentMonthNumber - 2, 1);
+    const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
+    const submissions = await getSubmissionsForMonth(prevMonth);
     const knownIds = await getKnownInternIds();
-    const submittedIds = await getSubmittedUserIds(currentMonth);
+    const submittedIds = await getSubmittedUserIds(prevMonth);
     const unsubmittedIds = knownIds.filter((id) => !submittedIds.includes(id));
 
     const managerChannelId = process.env.MANAGER_CHANNEL_ID;
@@ -165,7 +156,7 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `💰 *振込期限が近づいています（${formatDateJP(lastDayOfNextMonth)} 残り${daysUntilPayment}日）*`,
+            text: `💰 *振込期限が近づいています（${formatDateJP(lastDayOfMonth)} 残り${daysUntilSubmission}日）*`,
           },
         },
         {
