@@ -537,7 +537,26 @@ async function processConfirmedSubmission(draft: InternSalaryDraft, userId: stri
   const fileName = getInvoiceFileName(submission.month, submission.intern_name);
 
   const sharedChannelId = process.env.MANAGER_CHANNEL_ID;
+  const internDm = await slack.conversations.open({ users: userId });
+  const internDmChannelId = internDm.channel?.id;
+
   const tasks: Promise<unknown>[] = [];
+
+  if (internDmChannelId) {
+    tasks.push(
+      slack.filesUploadV2({
+        channel_id: internDmChannelId,
+        filename: fileName,
+        file: pdfBuffer,
+        initial_comment: [
+          `✅ 給与情報を提出しました（${formatMonthJP(submission.month)}分）`,
+          "",
+          `提出日時: ${formatDateTimeJST(new Date())}`,
+          `請求書番号: ${submission.invoice_number}`,
+        ].join("\n"),
+      })
+    );
+  }
 
   if (sharedChannelId) {
     tasks.push(
