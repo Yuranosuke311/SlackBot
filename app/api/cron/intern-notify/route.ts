@@ -144,13 +144,14 @@ export async function POST(request: NextRequest) {
     const prevMonthDate = new Date(currentYear, currentMonthNumber - 2, 1);
     const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
     const submissions = await getSubmissionsForMonth(prevMonth);
+    const unpaidSubmissions = submissions.filter((s) => s.status !== "paid");
     const knownIds = await getKnownInternIds();
     const submittedIds = await getSubmittedUserIds(prevMonth);
     const unsubmittedIds = knownIds.filter((id) => !submittedIds.includes(id));
 
     const managerChannelId = process.env.MANAGER_CHANNEL_ID;
 
-    if (managerChannelId) {
+    if (managerChannelId && unpaidSubmissions.length > 0) {
       const blocks: KnownBlock[] = [
         {
           type: "section",
@@ -166,18 +167,12 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*提出済み（${formatMonthJP(currentMonth)}）*`,
+            text: `*未払い（${formatMonthJP(prevMonth)}分）*`,
           },
         },
       ];
 
-      if (submissions.length === 0) {
-        blocks.push({
-          type: "section",
-          text: { type: "mrkdwn", text: "提出済みデータはありません。" },
-        });
-      } else {
-        for (const submission of submissions) {
+      for (const submission of unpaidSubmissions) {
           blocks.push(
             {
               type: "section",
@@ -199,7 +194,6 @@ export async function POST(request: NextRequest) {
               ],
             }
           );
-        }
       }
 
       blocks.push(
@@ -238,6 +232,35 @@ export async function POST(request: NextRequest) {
         blocks,
       });
     }
+  }
+
+  // ケース D: 月末当日にチャンネルへ締め切り案内ボタンを投稿
+  if (daysUntilSubmission === 0) {
+    await slack.chat.postMessage({
+      channel: process.env.INTERN_SALARY_CHANNEL_ID!,
+      text: "給与情報の提出は本日締め切りです",
+      blocks: [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `⏰ *給与情報の提出は本日（${formatDateJP(lastDayOfMonth)}）締め切りです*\nまだ提出されていない方は今すぐ提出してください。`,
+          },
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              action_id: "open_intern_salary_modal",
+              style: "primary",
+              text: { type: "plain_text", text: "📝 給与情報を提出する" },
+              value: "open",
+            },
+          ],
+        },
+      ],
+    });
   }
 
   return NextResponse.json({ ok: true });
