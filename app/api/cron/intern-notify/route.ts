@@ -178,6 +178,19 @@ export async function POST(request: NextRequest) {
 
     const managerChannelId = process.env.MANAGER_CHANNEL_ID;
 
+    if (managerChannelId && unpaidByMonth.length === 0) {
+      await slack.chat.postMessage({
+        channel: managerChannelId,
+        text: "全員の振込が完了しています",
+        blocks: [
+          {
+            type: "section",
+            text: { type: "mrkdwn", text: "✅ *全員の振込が完了しています*" },
+          },
+        ],
+      });
+    }
+
     if (managerChannelId && unpaidByMonth.length > 0) {
       const blocks: KnownBlock[] = [
         {
