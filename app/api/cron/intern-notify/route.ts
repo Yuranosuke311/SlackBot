@@ -31,6 +31,24 @@ function getLastDayOfMonth(year: number, month: number): string {
   return `${y}-${m}-${d}`;
 }
 
+function getPreviousMonth(month: string): string {
+  const [yearStr, monthStr] = month.split("-");
+  const year = Number(yearStr);
+  const m = Number(monthStr);
+  if (m === 1) return `${year - 1}-12`;
+  return `${year}-${String(m - 1).padStart(2, "0")}`;
+}
+
+function getPastMonths(currentMonth: string, count: number): string[] {
+  const months: string[] = [];
+  let month = currentMonth;
+  for (let i = 0; i < count; i++) {
+    month = getPreviousMonth(month);
+    months.push(month);
+  }
+  return months;
+}
+
 
 function getDaysUntil(targetDate: string, today: string): number {
   const target = new Date(targetDate).getTime();
@@ -138,20 +156,29 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // ケース C: 今月末3日前〜今月末日に先月分の振込サマリーを通知
-  // （先月提出 → 今月末振込のサイクルに合わせる）
+  // ケース C: 今月末3日前〜月末日に過去6ヶ月分の未払い振込サマリーを通知
   if (daysUntilSubmission >= 0 && daysUntilSubmission <= 3) {
-    const prevMonthDate = new Date(currentYear, currentMonthNumber - 2, 1);
-    const prevMonth = `${prevMonthDate.getFullYear()}-${String(prevMonthDate.getMonth() + 1).padStart(2, "0")}`;
-    const submissions = await getSubmissionsForMonth(prevMonth);
-    const unpaidSubmissions = submissions.filter((s) => s.status !== "paid");
+    const pastMonths = getPastMonths(currentMonth, 6);
+    const prevMonth = pastMonths[0];
+
+    // 過去6ヶ月の未払い提出を月ごとに収集
+    const unpaidByMonth: { month: string; submissions: Awaited<ReturnType<typeof getSubmissionsForMonth>> }[] = [];
+    for (const month of pastMonths) {
+      const monthSubmissions = await getSubmissionsForMonth(month);
+      const unpaid = monthSubmissions.filter((s) => s.status !== "paid");
+      if (unpaid.length > 0) {
+        unpaidByMonth.push({ month, submissions: unpaid });
+      }
+    }
+
+    // 未提出者（先月分のみ）
     const knownIds = await getKnownInternIds();
     const submittedIds = await getSubmittedUserIds(prevMonth);
     const unsubmittedIds = knownIds.filter((id) => !submittedIds.includes(id));
 
     const managerChannelId = process.env.MANAGER_CHANNEL_ID;
 
-    if (managerChannelId && unpaidSubmissions.length > 0) {
+    if (managerChannelId && unpaidByMonth.length > 0) {
       const blocks: KnownBlock[] = [
         {
           type: "section",
@@ -160,19 +187,15 @@ export async function POST(request: NextRequest) {
             text: `💰 *振込期限が近づいています（${formatDateJP(lastDayOfMonth)} 残り${daysUntilSubmission}日）*`,
           },
         },
-        {
-          type: "divider",
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*未払い（${formatMonthJP(prevMonth)}分）*`,
-          },
-        },
+        { type: "divider" },
       ];
 
-      for (const submission of unpaidSubmissions) {
+      for (const { month, submissions } of unpaidByMonth) {
+        blocks.push({
+          type: "section",
+          text: { type: "mrkdwn", text: `*未払い（${formatMonthJP(month)}分）*` },
+        });
+        for (const submission of submissions) {
           blocks.push(
             {
               type: "section",
@@ -194,19 +217,12 @@ export async function POST(request: NextRequest) {
               ],
             }
           );
+        }
       }
 
       blocks.push(
-        {
-          type: "divider",
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: "*未提出者*",
-          },
-        }
+        { type: "divider" },
+        { type: "section", text: { type: "mrkdwn", text: "*未提出者（先月分）*" } }
       );
 
       if (unsubmittedIds.length === 0) {
@@ -219,9 +235,7 @@ export async function POST(request: NextRequest) {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: unsubmittedIds
-              .map((userId) => `<@${userId}>（未提出）`)
-              .join("\n"),
+            text: unsubmittedIds.map((userId) => `<@${userId}>（未提出）`).join("\n"),
           },
         });
       }
